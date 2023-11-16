@@ -1,0 +1,23 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.7.34031.279
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{888888A0-9F3D-457C-B088-3A5042F75D52}") = "Virtual_FPGA", "Virtual_FPGA.pyproj", "{2C879070-CB7B-46FA-891A-DE94EAEAF173}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{2C879070-CB7B-46FA-891A-DE94EAEAF173}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{2C879070-CB7B-46FA-891A-DE94EAEAF173}.Release|Any CPU.ActiveCfg = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {6FC72910-F320-4572-A3B1-EBA58EEC06E0}
+	EndGlobalSection
+EndGlobal
