@@ -2,6 +2,7 @@
 from itertools import count
 import re
 import itertools
+import ast
 
 def simplify_expre(expre_all): 
     #Transform the format like X=a*b+a*b*c+a*c+d+d*e+f into X=a*b+a*c+d+f; non-canonical to canonical
@@ -95,11 +96,11 @@ def map_func_to_LUT_dependent(expression_list, num_of_bits):
         LUT_inst = LUT(find_literals(expression_list[i])[1],find_literals(expression_list[i])[0],expression_list[i],truth_dic)
         LUTs_list.append(LUT_inst)
     
-    for i in range(num_of_expre):
-        print("the input bits of the {0:2d} LUT is {1:2d}".format(i, LUTs_list[i].bits))
-        print("which function does this LUT hold?" )
-        LUTs_list[i].display_dic()
-        print("\n")
+    #for i in range(num_of_expre):
+        #print("the input bits of the {0:2d} LUT is {1:2d}".format(i, LUTs_list[i].bits))
+        #print("which function does this LUT hold?" )
+        #LUTs_list[i].display_dic()
+        #print("\n")
     
     return LUTs_list
 
@@ -121,14 +122,13 @@ def connection_config(LUTs_list):
     return connection_list
     
 class VirFGPA:
-    def __init__(self, input_vars, output_var, input_val, function_list, bitstream_enable, bit_stream):
+    def __init__(self, input_vars, output_var, input_val, function_list, bitstream_enable):
         self.input = input_vars
         self.output = output_var
         self.num_of_inputs = len(input_vars)
         self.input_val = input_val
         self.funclist = function_list
         self.read_from_bs = bitstream_enable
-        self.bitstream = bit_stream
         self.LUTs_list = []
         self.connection = []
         self.truth_dic = {}
@@ -136,10 +136,13 @@ class VirFGPA:
     def map_func_to_LUTs(self):
         #Generate LUTs_list
         self.LUTs_list = map_func_to_LUT_dependent(self.funclist, self.num_of_inputs)
+        return self.LUTs_list
     
     def connect_LUT(self):
         #Generate connection Information
+        #print(self.LUTs_list)
         self.connection = connection_config(self.LUTs_list)
+        return self.connection
         
     def calcu_truthtable(self):
         #Calculate output based on input, all intermediate results are included
@@ -162,22 +165,68 @@ class VirFGPA:
 
         return calculated_val
     
+    def output_bitstream(self):
+        bit_stream = []
+        #print(self.LUTs_list)
+        for i in range(len(self.LUTs_list)):
+            single_LUT_var = []
+            single_LUT_var.append(i) #LUT id
+            single_LUT_var.append(self.LUTs_list[i].bits) #LUT input len
+            single_LUT_var.append(self.LUTs_list[i].func) #LUT function
+            bit_stream.append(single_LUT_var)
+        bit_stream.append(self.connection) #the last item is connection list
+        print(bit_stream)
+        with open('bitstream.txt', 'w') as file:
+            file.write(str(bit_stream))
+         
+        return 0
+            
     def readin_bitstream(self):
-        if(self.bitstream == 1):
-            pass()
+        if(self.read_from_bs == 1):
+            LUT_readin_list = []
+            with open('./bitstream.txt', 'r') as file:
+                data = file.read()
+                profile = ast.literal_eval(data)
+                for lut_data in profile[:-1]:
+                    lut_id, input_num, function = lut_data
+                    #print(function)
+                    output_var, input_vars = find_literals(function.replace('*', ''))
+                    LUT_readin_list.append(LUT(input_vars, output_var, function, func_to_dic(function)))
+            self.LUTs_list = LUT_readin_list
+            self.connection = profile[-1]
+            
+            return self.LUTs_list, self.connection
             #do read in bitstream and generate diagram
+            #bit stream format: 
         else:
             print('Not reading from bitstream')
+    
+    def draw_diagram(self):
+        #Generate the schematic diagram here
+        pass
+    
 expression1 = ['X=a*c+a*c*b+b*d','Y=X*d', 'Z=X*a+X*c*d','W=X*Y*Z+X*Z*a+X*Y'] #ab+ac+abc+d
-calculated_valuelist = VirFGPA(['a','b','c','d'], 'W', [0,1,0,1],expression1, 0, 0).calcu_truthtable()
-print(calculated_valuelist)
+Vir_FPGA_instance = VirFGPA(['a','b','c','d'], 'W', [0,1,0,1],expression1, 1)
+Vir_FPGA_instance.map_func_to_LUTs()
+Vir_FPGA_instance.connect_LUT()
+#Vir_FPGA_instance.output_bitstream()
+LUTs_list, connection = Vir_FPGA_instance.readin_bitstream()
+for i in range(len(LUTs_list)):
+    print(LUTs_list[i].input)
+    print(LUTs_list[i].output)
+    print(LUTs_list[i].bits)
+    print(LUTs_list[i].func)
+    print(LUTs_list[i].dic)
+
+print(connection)
+#print(calculated_valuelist)
 #for i in range(len(expression1)):
 #    expression1[i] = simplify_expre(expression1[i])
 #print(expression1)
 #print(find_literals(expression1[0])[0])
 #print(find_literals(expression1[0])[1])
 #print(func_to_dic(expression1[0]))
-print(connection_config(map_func_to_LUT_dependent(expression1,4)))
+#print(connection_config(map_func_to_LUT_dependent(expression1,4)))
 
 #LUTs_list = map_func_to_LUT_dependent(expression1,4)
 #print(connection_config(LUTs_list))
@@ -186,8 +235,8 @@ print(connection_config(map_func_to_LUT_dependent(expression1,4)))
 What to do next?
 inter-dependent SOP functions DONE!
 non-canonical expression to canonical expression *IMPORTANT! DONE!
-logic expression decomposition, for example 7bits and gate -> 2 6bits and gate do and
-output bitstream file and restore from a bitstream file
-resource allocation summary
-A visual representation
+logic expression decomposition, for example 7bits and gate -> 2 6bits and gate do and    !!!Decomposition
+output bitstream file and restore from a bitstream file    !!!Bitstream
+resource allocation summary    !!!Allocation
+A visual representation    !!!Diagram
 '''
