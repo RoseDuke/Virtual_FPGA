@@ -4,7 +4,7 @@ import re
 import itertools
 import ast
 
-def simplify_expre(expre_all): 
+def simplify_expre(expre_all):
     #Transform the format like X=a*b+a*b*c+a*c+d+d*e+f into X=a*b+a*c+d+f; non-canonical to canonical
     expre = expre_all.split('=')[1]
     terms = expre.split('+')
@@ -34,9 +34,9 @@ def find_literals(expre):
         if (char.isalpha() or char.islower()) and char not in input_chars:
             input_chars.append(char)
     input_chars.sort()
-    
+
     return output, input_chars #Find output variable and all input variables
-    
+
 def simple_logic(expre):
     #X=a*b+c*d to X=a and b or c and d
     output, input_list = expre.split('=')
@@ -50,20 +50,20 @@ def simple_logic(expre):
 
     # Join the terms with ' or '
     logical_expression = ' or '.join(logical_terms)
-    
+
     return logical_expression
-    
+
 def func_to_dic(expre):
     #Given a logic equation, generate its truth table
     val = [0,1]
     truth_dic = {}
-    
+
     simple_expre = expre.split('=')[1]
-    
+
     literals = re.findall(r'[A-Za-z0-9]+', simple_expre)
     literals = list(set(literals))
     literals.sort()
-    
+
     #print(literals)
     simple_expre = simple_expre.replace('*', ' and ').replace('+', ' or ')
     #print(simple_expre)
@@ -82,7 +82,7 @@ class LUT:
         self.bits = len(input_vars)
         self.func = function
         self.dic = dictionary
-        
+
     def display_dic(self):
         for key, value in self.dic.items():
             print(f"{key}:{value}")
@@ -95,13 +95,13 @@ def map_func_to_LUT_dependent(expression_list, num_of_bits):
         truth_dic = func_to_dic(expression_list[i])
         LUT_inst = LUT(find_literals(expression_list[i])[1],find_literals(expression_list[i])[0],expression_list[i],truth_dic)
         LUTs_list.append(LUT_inst)
-    
+
     #for i in range(num_of_expre):
         #print("the input bits of the {0:2d} LUT is {1:2d}".format(i, LUTs_list[i].bits))
         #print("which function does this LUT hold?" )
         #LUTs_list[i].display_dic()
         #print("\n")
-    
+
     return LUTs_list
 
 def connection_config(LUTs_list):
@@ -118,32 +118,45 @@ def connection_config(LUTs_list):
                     # Check if the connection string is already in the list
                     if connection_str not in connection_list:
                         connection_list.append(connection_str)
-                        
+
     return connection_list
-    
+
 class VirFGPA:
-    def __init__(self, input_vars, output_var, input_val, function_list, bitstream_enable):
+
+    def __init__(self, input_vars, output_var, input_val, sop_dict, bitstream_enable, max_vars_per_LUT=4):
         self.input = input_vars
         self.output = output_var
         self.num_of_inputs = len(input_vars)
         self.input_val = input_val
-        self.funclist = function_list
+        self.sop_dict = sop_dict
         self.read_from_bs = bitstream_enable
+        self.max_vars_per_LUT = max_vars_per_LUT
         self.LUTs_list = []
         self.connection = []
-        self.truth_dic = {}
-    
-    def map_func_to_LUTs(self):
-        #Generate LUTs_list
-        self.LUTs_list = map_func_to_LUT_dependent(self.funclist, self.num_of_inputs)
-        return self.LUTs_list
-    
+
+    def map_sop_to_LUTs(self):
+        intermediate_vars = count(1)  # To generate intermediate variable names
+        for output_var, product_terms in self.sop_dict.items():
+            for term in product_terms:
+                while len(term) > self.max_vars_per_LUT:
+                    sub_expr = term[:self.max_vars_per_LUT]
+                    intermediate_var = f"Int{next(intermediate_vars)}"
+                    truth_dic = func_to_dic(f"{intermediate_var} = {' & '.join(sub_expr)}")
+                    LUT_inst = LUT(sub_expr, intermediate_var, f"{intermediate_var} = {' & '.join(sub_expr)}", truth_dic)
+                    self.LUTs_list.append(LUT_inst)
+                    term = [intermediate_var] + term[self.max_vars_per_LUT:]
+
+                final_expr = f"{output_var} = {' & '.join(term)}"
+                truth_dic = func_to_dic(final_expr)
+                LUT_inst = LUT(term, output_var, final_expr, truth_dic)
+                self.LUTs_list.append(LUT_inst)
+
     def connect_LUT(self):
         #Generate connection Information
         #print(self.LUTs_list)
         self.connection = connection_config(self.LUTs_list)
         return self.connection
-        
+
     def calcu_truthtable(self):
         #Calculate output based on input, all intermediate results are included
         finish = 0
@@ -164,7 +177,7 @@ class VirFGPA:
                     finish = 0
 
         return calculated_val
-    
+
     def output_bitstream(self):
         bit_stream = []
         #print(self.LUTs_list)
@@ -178,9 +191,9 @@ class VirFGPA:
         print(bit_stream)
         with open('bitstream.txt', 'w') as file:
             file.write(str(bit_stream))
-         
+
         return 0
-            
+
     def readin_bitstream(self):
         if(self.read_from_bs == 1):
             LUT_readin_list = []
@@ -194,22 +207,30 @@ class VirFGPA:
                     LUT_readin_list.append(LUT(input_vars, output_var, function, func_to_dic(function)))
             self.LUTs_list = LUT_readin_list
             self.connection = profile[-1]
-            
+
             return self.LUTs_list, self.connection
             #do read in bitstream and generate diagram
-            #bit stream format: 
+            #bit stream format:
         else:
             print('Not reading from bitstream')
-    
+
     def draw_diagram(self):
         #Generate the schematic diagram here
         pass
-    
-expression1 = ['X=a*c+a*c*b+b*d','Y=X*d', 'Z=X*a+X*c*d','W=X*Y*Z+X*Z*a+X*Y'] #ab+ac+abc+d
-Vir_FPGA_instance = VirFGPA(['a','b','c','d'], 'W', [0,1,0,1],expression1, 1)
-Vir_FPGA_instance.map_func_to_LUTs()
+
+# Example SOP Dictionary
+sop_dict = {
+    "X": [['a', 'c'], ['a', 'c', 'b'], ['b', 'd']],
+    "Y": [['X', 'd']],
+    "Z": [['X', 'a'], ['X', 'c', 'd']],
+    "W": [['X', 'Y', 'Z'], ['X', 'Z', 'a'], ['X', 'Y']]
+}
+Vir_FPGA_instance = VirFGPA(['a', 'b', 'c', 'd'], 'W', [0, 1, 0, 1], sop_dict, 1, 4)
+Vir_FPGA_instance.map_sop_to_LUTs()
 Vir_FPGA_instance.connect_LUT()
-#Vir_FPGA_instance.output_bitstream()
+Vir_FPGA_instance.output_bitstream()
+
+
 LUTs_list, connection = Vir_FPGA_instance.readin_bitstream()
 for i in range(len(LUTs_list)):
     print(LUTs_list[i].input)
@@ -219,17 +240,32 @@ for i in range(len(LUTs_list)):
     print(LUTs_list[i].dic)
 
 print(connection)
-#print(calculated_valuelist)
-#for i in range(len(expression1)):
-#    expression1[i] = simplify_expre(expression1[i])
-#print(expression1)
-#print(find_literals(expression1[0])[0])
-#print(find_literals(expression1[0])[1])
-#print(func_to_dic(expression1[0]))
-#print(connection_config(map_func_to_LUT_dependent(expression1,4)))
 
-#LUTs_list = map_func_to_LUT_dependent(expression1,4)
-#print(connection_config(LUTs_list))
+# Example SOP Dictionary
+sop_dict = {
+    "X": [['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p'],
+          ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'q'],
+          ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'r']],
+    "Y": [['X', 't'], ['X', 'r']]
+}
+
+Vir_FPGA_instance = VirFGPA(['a', 'b', 'c', 'd'], 'W', [0, 1, 0, 1], sop_dict, 1, 4)
+Vir_FPGA_instance.map_sop_to_LUTs()
+Vir_FPGA_instance.connect_LUT()
+Vir_FPGA_instance.output_bitstream()
+
+
+LUTs_list, connection = Vir_FPGA_instance.readin_bitstream()
+for i in range(len(LUTs_list)):
+    print(LUTs_list[i].input)
+    print(LUTs_list[i].output)
+    print(LUTs_list[i].bits)
+    print(LUTs_list[i].func)
+    print(LUTs_list[i].dic)
+
+print(connection)
+
+
 
 '''
 What to do next?
