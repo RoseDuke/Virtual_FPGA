@@ -325,7 +325,7 @@ Vir_FPGA_instance.output_bitstream()
 Vir_FPGA_instance.readin_bitstream()
 Vir_FPGA_instance.display_all_info()
 Vir_FPGA_instance.display_LUT_usage()
-
+# Vir_FPGA_instance.draw_diagram()
 
 
 # Example SOP Dictionary 2
@@ -345,10 +345,80 @@ Vir_FPGA_instance.output_bitstream()
 Vir_FPGA_instance.readin_bitstream()
 Vir_FPGA_instance.display_all_info()
 Vir_FPGA_instance.display_LUT_usage()
-Vir_FPGA_instance.draw_diagram()
+# Vir_FPGA_instance.draw_diagram()
 
 Vir_FPGA_instance2 = VirFGPA()
 Vir_FPGA_instance2.readin_bitstream()
+
+
+sop_dict_expanded = {
+    "A": [['a', 'b', 'c'], ['d', 'e', 'f', 'g'], ['h', 'i', 'j']],
+    "B": [['k', 'l', 'm', 'n'], ['o', 'p', 'q', 'r', 's'], ['t', 'u', 'v']],
+    "C": [['w', 'x', 'y', 'z'], ['a_', 'b_', 'c_', 'd_'], ['e_', 'f_', 'g_', 'h_']],
+    "D": [['i_', 'j_', 'k_'], ['l_', 'm_', 'n_', 'o_'], ['p_', 'q_', 'r_', 's_']],
+    "E": [['t_', 'u_', 'v_', 'w_'], ['x_', 'y_', 'z_'], ['aa', 'bb', 'cc', 'dd']],
+    "F": [['ee', 'ff', 'gg', 'hh'], ['ii', 'jj', 'kk', 'll'], ['mm', 'nn', 'oo', 'pp']],
+    "G": [['qq', 'rr', 'ss'], ['tt', 'uu', 'vv', 'ww'], ['xx', 'yy', 'zz']],
+    "H": [['aaa', 'bbb', 'ccc'], ['ddd', 'eee', 'fff'], ['ggg', 'hhh', 'iii']],
+    "I": [['jjj', 'kkk', 'lll', 'mmm'], ['nnn', 'ooo', 'ppp', 'qqq'], ['rrr', 'sss', 'ttt']],
+    "J": [['uuu', 'vvv', 'www'], ['xxx', 'yyy', 'zzz'], ['aaaa', 'bbbb', 'cccc']]
+}
+Vir_FPGA_instance = VirFGPA(sop_dict_expanded, 100, 0)
+Vir_FPGA_instance.map_sop_to_LUTs()
+Vir_FPGA_instance.connect_LUT()
+Vir_FPGA_instance.output_bitstream()
+
+Vir_FPGA_instance.readin_bitstream()
+Vir_FPGA_instance.display_all_info()
+Vir_FPGA_instance.display_LUT_usage()
+# Vir_FPGA_instance.draw_diagram()
+
+sop_dict_interconnected = {
+    "A": [['x', 'y', 'z'], ['a', 'b', 'c']],
+    "B": [['A', 'd', 'e'], ['f', 'g', 'h']],
+    "C": [['i', 'j', 'k', 'B'], ['l', 'm', 'n']],
+    "D": [['o', 'p', 'q', 'r'], ['C', 's', 't']],
+    "E": [['D', 'u', 'v'], ['w', 'x_', 'y_']],
+    "F": [['z_', 'aa', 'bb'], ['E', 'cc', 'dd']],
+    "G": [['ee', 'ff', 'gg', 'F'], ['hh', 'ii', 'jj']],
+    "H": [['kk', 'll', 'mm', 'G'], ['nn', 'oo', 'pp']],
+    "I": [['H', 'qq', 'rr'], ['ss', 'tt', 'uu']],
+    "J": [['vv', 'ww', 'xx'], ['yy', 'zz', 'I']]
+}
+
+Vir_FPGA_instance = VirFGPA(sop_dict_interconnected, 100, 0)
+Vir_FPGA_instance.map_sop_to_LUTs()
+Vir_FPGA_instance.connect_LUT()
+Vir_FPGA_instance.output_bitstream()
+
+Vir_FPGA_instance.readin_bitstream()
+Vir_FPGA_instance.display_all_info()
+Vir_FPGA_instance.display_LUT_usage()
+#Vir_FPGA_instance.draw_diagram()
+
+sop_dict_cyclic = {
+    "A": [['x', 'y', 'z'], ['B', 'c', 'd']],
+    "B": [['A', 'e', 'f'], ['g', 'h', 'i']],
+    "C": [['B', 'j', 'k'], ['l', 'm', 'n'], ['o', 'A', 'p']],
+    "D": [['q', 'r', 's'], ['C', 't', 'u']],
+    "E": [['D', 'v', 'w'], ['C', 'x_', 'y_']],
+    "F": [['z_', 'aa', 'bb'], ['E', 'cc', 'dd']],
+    "G": [['ee', 'ff', 'D'], ['hh', 'ii', 'E']],
+    "H": [['F', 'G', 'kk'], ['ll', 'mm', 'nn']],
+    "I": [['oo', 'pp', 'H'], ['qq', 'rr', 'C']],
+    "J": [['ss', 'tt', 'I'], ['uu', 'vv', 'ww'], ['xx', 'yy', 'zz']]
+}
+
+Vir_FPGA_instance = VirFGPA(sop_dict_cyclic, 100, 0)
+Vir_FPGA_instance.map_sop_to_LUTs()
+Vir_FPGA_instance.connect_LUT()
+Vir_FPGA_instance.output_bitstream()
+
+Vir_FPGA_instance.readin_bitstream()
+Vir_FPGA_instance.display_all_info()
+Vir_FPGA_instance.display_LUT_usage()
+Vir_FPGA_instance.draw_diagram()
+
 
 
 
