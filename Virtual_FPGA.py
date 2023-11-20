@@ -114,6 +114,16 @@ class VirFGPA:
             intermediate_var = f"Int{next(intermediate_vars)}"
             decomposed_terms.append(intermediate_var)
 
+            # Count unique inputs to determine LUT type
+            unique_inputs = set(sub_term)
+
+            if len(unique_inputs) <= 4:
+                self.available_4_inputs_LUTs -= 1
+            elif len(unique_inputs) <= 6:
+                self.available_6_inputs_LUTs -= 1
+            else:
+                raise Exception("Term has too many unique inputs for available LUTs")
+
             LUT_inst = LUT(sub_term, intermediate_var, f"{intermediate_var} = {' & '.join(sub_term)}")
             self.LUTs_list.append(LUT_inst)
 
@@ -127,34 +137,38 @@ class VirFGPA:
             if self.available_4_inputs_LUTs > 0:
                 # Prioritize 4-input LUT for smaller terms
                 sub_term = term
-                self.available_4_inputs_LUTs -= 1
             elif self.available_6_inputs_LUTs > 0:
                 # Use a 6-input LUT if no 4-input LUTs are available
                 sub_term = term
-                self.available_6_inputs_LUTs -= 1
             else:
                 raise Exception("Not enough LUTs available")
         elif len(term) > 6 and self.available_6_inputs_LUTs > 0:
             # Use 6-input LUT for larger terms
             sub_term = term[:6]
-            self.available_6_inputs_LUTs -= 1
         elif self.available_4_inputs_LUTs > 0:
             # If a term is larger than 4 but smaller than 7, and there are no 6-input LUTs, split it for 4-input LUTs
             sub_term = term[:4]
-            self.available_4_inputs_LUTs -= 1
         else:
             raise Exception("Not enough LUTs available")
 
         return sub_term, term[len(sub_term):]
 
     def combine_terms(self, terms, intermediate_vars):
-        """
-        Combines multiple terms into a single term using an intermediate variable.
-        """
         # Combining terms into a single LUT
         intermediate_var = f"Int{next(intermediate_vars)}"
         combined_expr = ' & '.join(terms)
-        LUT_inst = LUT(terms, intermediate_var, f"{intermediate_var} = {combined_expr}")
+
+        # Count unique inputs to determine LUT type
+        unique_inputs = set(terms)
+
+        if len(unique_inputs) <= 4:
+            self.available_4_inputs_LUTs -= 1
+        elif len(unique_inputs) <= 6:
+            self.available_6_inputs_LUTs -= 1
+        else:
+            raise Exception("Term has too many unique inputs for available LUTs")
+
+        LUT_inst = LUT(list(terms), intermediate_var, f"{intermediate_var} = {combined_expr}")
         self.LUTs_list.append(LUT_inst)
         return intermediate_var
 
@@ -165,8 +179,6 @@ class VirFGPA:
         # Combining all terms into a final LUT
         final_terms = []
         for terms in all_combined_terms:
-
-            print(terms)
             if len(terms) == 1:
                 final_terms.append(terms[0])
             else:
@@ -181,7 +193,15 @@ class VirFGPA:
         """
         # Create the final LUT that ORs the outputs of the combined LUTs
         final_expr = ' | '.join(final_terms)
+
         if not any(lut.output == output_var for lut in self.LUTs_list):
+            unique_inputs = set(final_terms)
+            if len(unique_inputs) <= 4:
+                self.available_4_inputs_LUTs -= 1
+            elif len(unique_inputs) <= 6:
+                self.available_6_inputs_LUTs -= 1
+            else:
+                raise Exception("Term has too many unique inputs for available LUTs")
             LUT_inst = LUT(final_terms, output_var, f"{output_var} = {final_expr}")
             self.LUTs_list.append(LUT_inst)
     def connect_LUT(self):
@@ -197,32 +217,59 @@ class VirFGPA:
                     self.connection[i].append(j)
         return self.connection
 
-    def output_bitstream(self):
+    def output_bitstream(self, binary=False):
         """
-        output the bitstream file, which can be used to restore the FPGA
+        Outputs the bitstream file, which can be used to restore the FPGA state.
+        Includes details about LUTs and FPGA configuration.
         """
         bitstream_data = {
             "LUTs": [{"id": i, "inputs": lut.input, "output": lut.output, "function": lut.logic} for i, lut in
                      enumerate(self.LUTs_list)],
-            "connections": self.connection
+            "connections": self.connection,
+            "input_vars": list(self.input_vars),
+            "output_vars": list(self.output_vars),
+            "total_4_input_LUTs": self.total_4_input_LUTs,
+            "total_6_input_LUTs": self.total_6_input_LUTs,
+            "available_4_inputs_LUTs": self.available_4_inputs_LUTs,
+            "available_6_inputs_LUTs": self.available_6_inputs_LUTs
         }
-        bitstream_json = json.dumps(bitstream_data, indent=4)
-        # print(bitstream_json)
-        with open('bitstream.json', 'w') as file:
-            file.write(bitstream_json)
+
+        # Convert to binary sequence if needed
+        if binary:
+            json_string = json.dumps(bitstream_data)
+            binary_data = ''.join(format(ord(char), '08b') for char in json_string)
+            with open('bitstream.seq', 'w') as binary_file:
+                binary_file.write(binary_data)
+        else:
+            bitstream_json = json.dumps(bitstream_data, indent=4)
+            with open('bitstream.json', 'w') as file:
+                file.write(bitstream_json)
         return 0
 
-    def readin_bitstream(self):
+    def readin_bitstream(self, binary=False):
         """
-        read in a bitstream file and restore the FPGA
+        Reads in a bitstream file and restores the FPGA state.
+        Recreates the FPGA configuration including LUT details and available resources.
         """
-        with open('bitstream.json', 'r') as file:
-            bitstream_data = json.load(file)
-            self.LUTs_list = [LUT(lut["inputs"], lut["output"], lut["function"]) for
-                              lut in bitstream_data["LUTs"]]
-            self.connection = bitstream_data["connections"]
-        return self.LUTs_list, self.connection
+        if binary:
+            with open('bitstream.seq', 'r') as binary_file:
+                binary_data = binary_file.read()
+            string_data = ''.join(chr(int(binary_data[i:i + 8], 2)) for i in range(0, len(binary_data), 8))
+            bitstream_data = json.loads(string_data)
+        else:
+            with open('bitstream.json', 'r') as file:
+                bitstream_data = json.load(file)
 
+        self.LUTs_list = [LUT(lut["inputs"], lut["output"], lut["function"]) for lut in bitstream_data["LUTs"]]
+        self.connection = bitstream_data["connections"]
+        self.input_vars = set(bitstream_data["input_vars"])
+        self.output_vars = set(bitstream_data["output_vars"])
+        self.total_4_input_LUTs = bitstream_data["total_4_input_LUTs"]
+        self.total_6_input_LUTs = bitstream_data["total_6_input_LUTs"]
+        self.available_4_inputs_LUTs = bitstream_data["available_4_inputs_LUTs"]
+        self.available_6_inputs_LUTs = bitstream_data["available_6_inputs_LUTs"]
+
+        return self.LUTs_list, self.connection
 
     def display_all_info(self, truth_table_enable=0):
         """
@@ -319,15 +366,16 @@ sop_dict = {
     "W": [['X', 'Y', 'Z'], ['X', 'Z', 'a'], ['X', 'Y']]
 }
 
-Vir_FPGA_instance = VirFGPA(sop_dict, 100, 100)
+Vir_FPGA_instance = VirFGPA(sop_dict, 100, 0)
 Vir_FPGA_instance.map_sop_to_LUTs()
 Vir_FPGA_instance.connect_LUT()
 Vir_FPGA_instance.output_bitstream()
 
-Vir_FPGA_instance.readin_bitstream()
-Vir_FPGA_instance.display_all_info()
-Vir_FPGA_instance.display_LUT_usage()
-# Vir_FPGA_instance.draw_diagram()
+Vir_FPGA_instance2 = VirFGPA()
+Vir_FPGA_instance2.readin_bitstream()
+Vir_FPGA_instance2.display_all_info()
+Vir_FPGA_instance2.display_LUT_usage()
+#Vir_FPGA_instance2.draw_diagram()
 
 
 # Example SOP Dictionary 2
@@ -344,16 +392,14 @@ Vir_FPGA_instance.map_sop_to_LUTs()
 Vir_FPGA_instance.connect_LUT()
 Vir_FPGA_instance.output_bitstream()
 
-Vir_FPGA_instance.readin_bitstream()
-Vir_FPGA_instance.display_all_info()
-Vir_FPGA_instance.display_LUT_usage()
-# Vir_FPGA_instance.draw_diagram()
-
 Vir_FPGA_instance2 = VirFGPA()
 Vir_FPGA_instance2.readin_bitstream()
+Vir_FPGA_instance2.display_all_info()
+Vir_FPGA_instance2.display_LUT_usage()
+#Vir_FPGA_instance2.draw_diagram()
 
 
-sop_dict_expanded = {
+sop_dict = {
     "A": [['a', 'b', 'c'], ['d', 'e', 'f', 'g'], ['h', 'i', 'j']],
     "B": [['k', 'l', 'm', 'n'], ['o', 'p', 'q', 'r', 's'], ['t', 'u', 'v']],
     "C": [['w', 'x', 'y', 'z'], ['a_', 'b_', 'c_', 'd_'], ['e_', 'f_', 'g_', 'h_']],
@@ -365,17 +411,19 @@ sop_dict_expanded = {
     "I": [['jjj', 'kkk', 'lll', 'mmm'], ['nnn', 'ooo', 'ppp', 'qqq'], ['rrr', 'sss', 'ttt']],
     "J": [['uuu', 'vvv', 'www'], ['xxx', 'yyy', 'zzz'], ['aaaa', 'bbbb', 'cccc']]
 }
-Vir_FPGA_instance = VirFGPA(sop_dict_expanded, 100, 0)
+
+Vir_FPGA_instance = VirFGPA(sop_dict, 100, 0)
 Vir_FPGA_instance.map_sop_to_LUTs()
 Vir_FPGA_instance.connect_LUT()
 Vir_FPGA_instance.output_bitstream()
 
-Vir_FPGA_instance.readin_bitstream()
-Vir_FPGA_instance.display_all_info()
-Vir_FPGA_instance.display_LUT_usage()
-# Vir_FPGA_instance.draw_diagram()
+Vir_FPGA_instance2 = VirFGPA()
+Vir_FPGA_instance2.readin_bitstream()
+Vir_FPGA_instance2.display_all_info()
+Vir_FPGA_instance2.display_LUT_usage()
+#Vir_FPGA_instance2.draw_diagram()
 
-sop_dict_interconnected = {
+sop_dict = {
     "A": [['x', 'y', 'z'], ['a', 'b', 'c']],
     "B": [['A', 'd', 'e'], ['f', 'g', 'h']],
     "C": [['i', 'j', 'k', 'B'], ['l', 'm', 'n']],
@@ -388,17 +436,18 @@ sop_dict_interconnected = {
     "J": [['vv', 'ww', 'xx'], ['yy', 'zz', 'I']]
 }
 
-Vir_FPGA_instance = VirFGPA(sop_dict_interconnected, 100, 0)
+Vir_FPGA_instance = VirFGPA(sop_dict, 100, 0)
 Vir_FPGA_instance.map_sop_to_LUTs()
 Vir_FPGA_instance.connect_LUT()
 Vir_FPGA_instance.output_bitstream()
 
-Vir_FPGA_instance.readin_bitstream()
-Vir_FPGA_instance.display_all_info()
-Vir_FPGA_instance.display_LUT_usage()
-#Vir_FPGA_instance.draw_diagram()
+Vir_FPGA_instance2 = VirFGPA()
+Vir_FPGA_instance2.readin_bitstream()
+Vir_FPGA_instance2.display_all_info()
+Vir_FPGA_instance2.display_LUT_usage()
+#Vir_FPGA_instance2.draw_diagram()
 
-sop_dict_cyclic = {
+sop_dict = {
     "A": [['x', 'y', 'z'], ['B', 'c', 'd']],
     "B": [['A', 'e', 'f'], ['g', 'h', 'i']],
     "C": [['B', 'j', 'k'], ['l', 'm', 'n'], ['o', 'A', 'p']],
@@ -411,29 +460,31 @@ sop_dict_cyclic = {
     "J": [['ss', 'tt', 'I'], ['uu', 'vv', 'ww'], ['xx', 'yy', 'zz']]
 }
 
-Vir_FPGA_instance = VirFGPA(sop_dict_cyclic, 100, 0)
+Vir_FPGA_instance = VirFGPA(sop_dict, 100, 0)
 Vir_FPGA_instance.map_sop_to_LUTs()
 Vir_FPGA_instance.connect_LUT()
 Vir_FPGA_instance.output_bitstream()
 
-Vir_FPGA_instance.readin_bitstream()
-Vir_FPGA_instance.display_all_info()
-Vir_FPGA_instance.display_LUT_usage()
-# Vir_FPGA_instance.draw_diagram()
+Vir_FPGA_instance2 = VirFGPA()
+Vir_FPGA_instance2.readin_bitstream()
+Vir_FPGA_instance2.display_all_info()
+Vir_FPGA_instance2.display_LUT_usage()
+#Vir_FPGA_instance2.draw_diagram()
 
 
-sop_dict_cyclic = {
+sop_dict = {
     "A": [['x', 'B', 'z']],
     "B": [['A', 'C', 'f'], ['A', 'C', 'i']],
     "C": [['B', 'j', 'k'], ['A', 'B', 'n'], ['o', 'A', 'p']],
 }
 
-Vir_FPGA_instance = VirFGPA(sop_dict_cyclic, 100, 0)
+Vir_FPGA_instance = VirFGPA(sop_dict, 100, 0)
 Vir_FPGA_instance.map_sop_to_LUTs()
 Vir_FPGA_instance.connect_LUT()
-Vir_FPGA_instance.output_bitstream()
+Vir_FPGA_instance.output_bitstream(binary=True)
 
-Vir_FPGA_instance.readin_bitstream()
-Vir_FPGA_instance.display_all_info()
-Vir_FPGA_instance.display_LUT_usage()
-Vir_FPGA_instance.draw_diagram()
+Vir_FPGA_instance2 = VirFGPA()
+Vir_FPGA_instance2.readin_bitstream(binary=True)
+Vir_FPGA_instance2.display_all_info()
+Vir_FPGA_instance2.display_LUT_usage()
+Vir_FPGA_instance2.draw_diagram()
