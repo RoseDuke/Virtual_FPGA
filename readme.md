@@ -40,3 +40,10 @@ Python 3.x
 Graphviz library for diagram rendering
 Regular expressions (re) module
 itertools module
+
+## References
+<ol>
+    <li>https://graphviz.readthedocs.io/en/stable/examples.html</li>
+    <li>https://stackoverflow.com/questions/11479624/is-there-a-way-to-guarantee-hierarchical-output-from-networkx</li>
+    <li>https://towardsdatascience.com/graph-visualisation-basics-with-python-part-iii-directed-graphs-with-graphviz-50116fb0d670</li>
+</ol>

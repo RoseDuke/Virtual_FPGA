@@ -165,6 +165,8 @@ class VirFGPA:
         # Combining all terms into a final LUT
         final_terms = []
         for terms in all_combined_terms:
+
+            print(terms)
             if len(terms) == 1:
                 final_terms.append(terms[0])
             else:
@@ -417,10 +419,24 @@ Vir_FPGA_instance.output_bitstream()
 Vir_FPGA_instance.readin_bitstream()
 Vir_FPGA_instance.display_all_info()
 Vir_FPGA_instance.display_LUT_usage()
+# Vir_FPGA_instance.draw_diagram()
+
+
+sop_dict_cyclic = {
+    "A": [['x', 'B', 'z']],
+    "B": [['A', 'C', 'f'], ['A', 'C', 'i']],
+    "C": [['B', 'j', 'k'], ['A', 'B', 'n'], ['o', 'A', 'p']],
+}
+
+Vir_FPGA_instance = VirFGPA(sop_dict_cyclic, 100, 0)
+Vir_FPGA_instance.map_sop_to_LUTs()
+Vir_FPGA_instance.connect_LUT()
+Vir_FPGA_instance.output_bitstream()
+
+Vir_FPGA_instance.readin_bitstream()
+Vir_FPGA_instance.display_all_info()
+Vir_FPGA_instance.display_LUT_usage()
 Vir_FPGA_instance.draw_diagram()
-
-
-
 
 
 '''
