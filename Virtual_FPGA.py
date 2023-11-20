@@ -437,13 +437,3 @@ Vir_FPGA_instance.readin_bitstream()
 Vir_FPGA_instance.display_all_info()
 Vir_FPGA_instance.display_LUT_usage()
 Vir_FPGA_instance.draw_diagram()
-
-
-'''
-To do list:
-1. Inter-dependent SOP functions Done
-2. Logic expression decomposition Done
-3. Output bitstream file and restore from a bitstream file  Corrected tons of bugs
-4. A resource allocation summary    Done
-5. A visual representation    Done
-'''
